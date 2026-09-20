@@ -1,8 +1,9 @@
 {
   "name": "key-panel",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
-    "@vercel/postgres": "^0.9.0",
+    "@neondatabase/serverless": "^0.10.4",
     "jsonwebtoken": "^9.0.2"
   }
 }
