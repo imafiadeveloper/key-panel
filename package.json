@@ -1,0 +1,8 @@
+{
+  "name": "key-panel",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vercel/postgres": "^0.9.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
