@@ -1,9 +1,18 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// ---- Neon SQL wrapper (tagged template) ----
+const _neon = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL);
+const sql = async (strings, ...values) => {
+  let q = strings[0];
+  for (let i = 0; i < values.length; i++) q += '$' + (i + 1) + strings[i + 1];
+  const rows = await _neon(q, values);
+  return { rows };
+};
 
 // ---- helpers ----
 const genKey = () => {
@@ -55,15 +64,33 @@ async function ensureSchema() {
   schemaReady = true;
 }
 
+// ---- parse body for Vercel ----
+async function readBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (chunk) => { data += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); }
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
 export default async function handler(req, res) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const path = (req.url || '').replace(/^\/api\/?/, '').split('?')[0];
-  const body = req.body || {};
+  const body = await readBody(req);
   const ip = getIP(req);
+
+  // ---- extract path ----
+  let path = (req.url || '').split('?')[0];
+  path = path.replace(/^\/api\/?/, '').replace(/\/$/, '');
+  if (path === 'index.js' || path === 'index') path = '';
 
   try {
     await ensureSchema();
@@ -204,14 +231,6 @@ export default async function handler(req, res) {
       return res.json({ ok: true, stats, keys, logs, devices, config: cfg });
     }
 
-    // ============ SEARCH ============
-    if (path === 'admin/search' && req.method === 'POST') {
-      const q = '%' + (body.q || '') + '%';
-      const { rows } = await sql`SELECT * FROM keys WHERE key_value ILIKE ${q} OR note ILIKE ${q}
-        ORDER BY created_at DESC LIMIT 50`;
-      return res.json({ ok: true, results: rows });
-    }
-
     // ============ KILLSWITCH ============
     if (path === 'admin/killswitch' && req.method === 'POST') {
       if (typeof body.killswitch === 'boolean')
@@ -242,7 +261,7 @@ export default async function handler(req, res) {
 
     return res.status(404).json({ ok: false, error: 'not_found: ' + path });
   } catch (e) {
-    console.error(e);
+    console.error('API error:', e);
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 }
