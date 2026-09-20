@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key Panel</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f172a; color: #fff;
+    font-family: system-ui, -apple-system, sans-serif; }
+  input, button, select, textarea { font-family: inherit; }
+  .wrap { min-height: 100vh; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  .head { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .card { background: #1e293b; padding: 14px; border-radius: 10px; margin-bottom: 14px;
+    border: 1px solid #334155; }
+  .input { padding: 8px 10px; border-radius: 6px; border: 1px solid #334155;
+    background: #0f172a; color: #fff; margin-right: 6px; font-size: 13px; }
+  .btn { padding: 8px 14px; border-radius: 6px; border: 0; background: #3b82f6;
+    color: #fff; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .btn:hover { background: #2563eb; }
+  .btn.green { background: #22c55e; }
+  .btn.red { background: #ef4444; }
+  .btn.gray { background: #475569; }
+  .btn.mini { padding: 4px 8px; font-size: 11px; margin-right: 4px; }
+  .tab { padding: 6px 12px; margin-right: 6px; border-radius: 6px; border: 0;
+    background: #334155; color: #fff; cursor: pointer; font-weight: 600; font-size: 12px; }
+  .tab.on { background: #3b82f6; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; margin-bottom: 16px; }
+  .stat { background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;
+    border: 1px solid #334155; }
+  .stat .n { font-size: 12px; opacity: 0.7; margin-bottom: 4px; }
+  .stat .v { font-size: 26px; font-weight: 700; }
+  table { width: 100%; font-size: 12.5px; border-collapse: collapse; }
+  th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #334155; }
+  th { background: #0f172a; font-size: 11px; text-transform: uppercase; opacity: 0.8; }
+  .mono { font-family: ui-monospace, monospace; font-size: 11.5px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .toast { position: fixed; top: 16px; right: 16px; padding: 12px 18px; border-radius: 8px;
+    font-weight: 600; z-index: 999; animation: slideIn 0.2s ease; }
+  .toast.ok { background: #22c55e; }
+  .toast.err { background: #ef4444; }
+  @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: 0; opacity: 1; } }
+  .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-card { background: #1e293b; padding: 28px; border-radius: 12px; width: 320px;
+    border: 1px solid #334155; }
+  .login-card h2 { margin: 0 0 16px 0; text-align: center; }
+  .login-card input { width: 100%; margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px;
+    font-weight: 700; }
+  .badge.ok { background: #166534; color: #86efac; }
+  .badge.err { background: #7f1d1d; color: #fca5a5; }
+  .badge.warn { background: #78350f; color: #fcd34d; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback } = React;
+
+// ---------- API ----------
+const API = {
+  async call(path, body) {
+    const opts = { method: body ? 'POST' : 'GET', credentials: 'include' };
+    if (body) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
+    const r = await fetch('/api/' + path, opts);
+    return { status: r.status, data: await r.json().catch(() => ({})) };
+  }
+};
+
+// ---------- Toast ----------
+function Toast({ msg, type }) {
+  if (!msg) return null;
+  return <div className={'toast ' + (type || 'ok')}>{msg}</div>;
+}
+
+// ---------- Stat ----------
+function Stat({ n, v, color }) {
+  return (
+    <div className="stat">
+      <div className="n">{n}</div>
+      <div className="v" style={{ color: color || '#3b82f6' }}>{v}</div>
+    </div>
+  );
+}
+
+// ---------- Login ----------
+function Login({ onLogin }) {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    const r = await API.call('admin/login', { password: pw });
+    setBusy(false);
+    if (r.data.ok) onLogin();
+    else setErr(r.data.error || 'Login failed');
+  }
+  return (
+    <div className="login-wrap">
+      <form className="login-card" onSubmit={submit}>
+        <h2>🔐 Admin Login</h2>
+        <input className="input" type="password" placeholder="Password"
+          value={pw} onChange={e => setPw(e.target.value)} autoFocus />
+        <button className="btn" style={{ width: '100%' }} disabled={busy}>
+          {busy ? 'Logging in…' : 'Login'}
+        </button>
+        {err && <p style={{ color: '#f87171', marginTop: 12, fontSize: 13 }}>{err}</p>}
+      </form>
+    </div>
+  );
+}
+
+// ---------- Home / Overview ----------
+function Home({ data, load, toast }) {
+  const [max, setMax] = useState(1);
+  const [days, setDays] = useState(30);
+  const [count, setCount] = useState(1);
+  const [note, setNote] = useState('');
+  const [generated, setGenerated] = useState([]);
+
+  async function generate() {
+    const r = await API.call('key/generate', {
+      max_devices: +max, expiry_days: +days, count: +count, note
+    });
+    if (r.data.ok) {
+      setGenerated(r.data.keys);
+      toast(`✅ ${r.data.keys.length} key(s) generated`);
+      load();
+    } else toast('❌ ' + r.data.error, 'err');
+  }
+
+  return (
+    <>
+      <div className="grid">
+        <Stat n="Total Keys" v={data.stats.totalKeys} />
+        <Stat n="Active" v={data.stats.activeKeys} color="#22c55e" />
+        <Stat n="Expired" v={data.stats.expiredKeys} color="#f59e0b" />
+        <Stat n="Revoked" v={data.stats.revokedKeys} color="#ef4444" />
+        <Stat n="Lifetime" v={data.stats.lifetimeKeys} color="#a855f7" />
+        <Stat n="Devices" v={data.stats.totalDevices} />
+        <Stat n="Banned" v={data.stats.bannedDevices} color="#ef4444" />
+      </div>
+
+      <h3>⚡ Generate Keys</h3>
+      <div className="card">
+        <div className="row">
+          <label>Max Devices <input className="input" type="number" min="1"
+            value={max} onChange={e => setMax(+e.target.value)} style={{ width: 60 }} /></label>
+          <label>Expiry Days <input className="input" type="number" min="0"
+            value={days} onChange={e => setDays(+e.target.value)} style={{ width: 70 }} /></label>
+          <label>Count <input className="input" type="number" min="1" max="500"
+            value={count} onChange={e => setCount(+e.target.value)} style={{ width: 70 }} /></label>
+          <label>Note <input className="input" value={note}
+            onChange={e => setNote(e.target.value)} /></label>
+          <button className="btn green" onClick={generate}>Generate</button>
+        </div>
+        {generated.length > 0 && (
+          <>
+            <p style={{ fontSize: 12, opacity: 0.8, marginTop: 12 }}>
+              Latest {generated.length} keys (click to copy all):
+            </p>
+            <textarea readOnly className="input" style={{ width: '100%', height: 100 }}
+              value={generated.join('\n')}
+              onClick={e => { e.target.select(); document.execCommand('copy'); toast('Copied!'); }} />
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ---------- Keys Tab ----------
+function KeysTab({ data, load, toast }) {
+  const [q, setQ] = useState('');
+  const [filtered, setFiltered] = useState(data.keys);
+
+  useEffect(() => {
+    if (!q) return setFiltered(data.keys);
+    const lq = q.toLowerCase();
+    setFiltered(data.keys.filter(k =>
+      k.key_value.toLowerCase().includes(lq) ||
+      (k.note || '').toLowerCase().includes(lq)
+    ));
+  }, [q, data.keys]);
+
+  async function act(path, payload, msg) {
+    const r = await API.call(path, payload);
+    if (r.data.ok) { toast(msg); load(); }
+    else toast('❌ ' + r.data.error, 'err');
+  }
+
+  return (
+    <div className="card">
+      <div className="row" style={{ marginBottom: 12 }}>
+        <input className="input" placeholder="🔍 Search key or note..."
+          value={q} onChange={e => setQ(e.target.value)} style={{ width: 300 }} />
+        <span style={{ fontSize: 12, opacity: 0.7 }}>{filtered.length} results</span>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th><th>Devices</th><th>Expiry</th><th>Status</th><th>Note</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(k => {
+              const expired = k.expiry_at && new Date(k.expiry_at) < new Date();
+              const status = k.is_revoked ? 'REVOKED' : expired ? 'EXPIRED' : 'ACTIVE';
+              const cls = k.is_revoked ? 'err' : expired ? 'warn' : 'ok';
+              return (
+                <tr key={k.id}>
+                  <td className="mono">
+                    <span onClick={() => { navigator.clipboard.writeText(k.key_value); toast('Copied!'); }}
+                      style={{ cursor: 'pointer' }}>{k.key_value}</span>
+                  </td>
+                  <td>{k.used_devices}/{k.max_devices}</td>
+                  <td>{k.expiry_at ? new Date(k.expiry_at).toLocaleDateString() : '∞'}</td>
+                  <td><span className={'badge ' + cls}>{status}</span></td>
+                  <td style={{ fontSize: 11, opacity: 0.8 }}>{k.note}</td>
+                  <td>
+                    {!k.is_revoked
+                      ? <button className="btn mini red" onClick={() => act('key/revoke', { key: k.key_value }, 'Revoked')}>Revoke</button>
+                      : <button className="btn mini green" onClick={() => act('key/unrevoke', { key: k.key_value }, 'Unrevoked')}>Unrevoke</button>
+                    }
+                    <button className="btn mini" onClick={() => {
+                      const d = prompt('Days to extend?', '7');
+                      if (d) act('key/extend', { key: k.key_value, days: +d }, `+${d} days`);
+                    }}>+Days</button>
+                    <button className="btn mini" onClick={async () => {
+                      const r = await API.call('key/regenerate', { old_key: k.key_value });
+                      if (r.data.ok) { alert('New key: ' + r.data.new_key); load(); }
+                    }}>Regen</button>
+                    <button className="btn mini" onClick={() => {
+                      if (confirm('Remove all devices from this key?'))
+                        act('key/reset-hwid', { key: k.key_value }, 'HWID reset');
+                    }}>Reset</button>
+                    <button className="btn mini red" onClick={() => {
+                      if (confirm('DELETE this key permanently?'))
+                        act('key/delete', { key: k.key_value }, 'Deleted');
+                    }}>Del</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Devices Tab ----------
+function DevicesTab({ data, load, toast }) {
+  async function toggleBan(hwid, ban) {
+    const r = await API.call('admin/ban', { hwid, ban });
+    if (r.data.ok) { toast(ban ? '🚫 Banned' : '✅ Unbanned'); load(); }
+  }
+  return (
+    <div className="card">
+      <h3>📱 Registered Devices ({data.devices.length})</h3>
+      <div style={{ overflowX: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th><th>HWID</th><th>Model</th><th>Brand</th><th>Android</th>
+              <th>First</th><th>Last Seen</th><th>IP</th><th>Status</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.devices.map(d => (
+              <tr key={d.id}>
+                <td className="mono">{d.key_value}</td>
+                <td className="mono" title={d.hwid}>{d.hwid?.slice(0, 12)}…</td>
+                <td>{d.device_model}</td>
+                <td>{d.device_brand}</td>
+                <td>{d.android_ver}</td>
+                <td style={{ fontSize: 11 }}>{new Date(d.first_seen).toLocaleDateString()}</td>
+                <td style={{ fontSize: 11 }}>{new Date(d.last_seen).toLocaleString()}</td>
+                <td className="mono" style={{ fontSize: 11 }}>{d.last_ip}</td>
+                <td>{d.is_banned
+                  ? <span className="badge err">BANNED</span>
+                  : <span className="badge ok">OK</span>}</td>
+                <td>
+                  {d.is_banned
+                    ? <button className="btn mini green" onClick={() => toggleBan(d.hwid, false)}>Unban</button>
+                    : <button className="btn mini red" onClick={() => toggleBan(d.hwid, true)}>Ban</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Logs Tab ----------
+function LogsTab({ data, load, toast }) {
+  async function clearLogs() {
+    if (!confirm('Clear all logs?')) return;
+    await API.call('admin/clear-logs', {});
+    toast('Logs cleared'); load();
+  }
+  const colorFor = (a) => ({
+    login: '#22c55e', fail: '#ef4444', generate: '#3b82f6',
+    revoke: '#ef4444', extend: '#f59e0b', ban: '#ef4444'
+  })[a] || '#94a3b8';
+
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ margin: 0 }}>📜 Live Logs ({data.logs.length})</h3>
+        <button className="btn red mini" onClick={clearLogs}>Clear All</button>
+      </div>
+      <div style={{ maxHeight: 600, overflowY: 'auto' }}>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Key</th><th>HWID</th><th>Action</th><th>Message</th><th>IP</th></tr>
+          </thead>
+          <tbody>
+            {data.logs.map((l, i) => (
+              <tr key={i}>
+                <td style={{ fontSize: 11 }}>{new Date(l.created_at).toLocaleString()}</td>
+                <td className="mono" style={{ fontSize: 11 }}>{l.key_value}</td>
+                <td className="mono" style={{ fontSize: 11 }}>{l.hwid?.slice(0, 12)}</td>
+                <td><span style={{ color: colorFor(l.action), fontWeight: 700 }}>{l.action}</span></td>
+                <td style={{ fontSize: 11 }}>{l.message}</td>
+                <td className="mono" style={{ fontSize: 11 }}>{l.ip}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Config Tab ----------
+function ConfigTab({ data, load, toast }) {
+  const [bcast, setBcast] = useState(data.config.broadcast_msg || '');
+
+  async function saveBcast() {
+    await API.call('admin/broadcast', { message: bcast });
+    toast('📢 Broadcast saved'); load();
+  }
+  async function toggleKill(v) {
+    await API.call('admin/killswitch', { killswitch: v });
+    toast(v ? '🔴 KILLSWITCH ON' : '✅ Killswitch OFF', v ? 'err' : 'ok');
+    load();
+  }
+  async function toggleMaint(v) {
+    await API.call('admin/killswitch', { maintenance: v });
+    toast(v ? '🔧 Maintenance ON' : '✅ Maintenance OFF');
+    load();
+  }
+
+  return (
+    <>
+      <div className="card">
+        <h3>📢 Broadcast Message</h3>
+        <p style={{ fontSize: 12, opacity: 0.8 }}>
+          Ye message har user ko dikhega jab wo validate karega.
+        </p>
+        <div className="row">
+          <input className="input" style={{ width: '70%' }} value={bcast}
+            onChange={e => setBcast(e.target.value)}
+            placeholder="e.g. Server maintenance at 10 PM" />
+          <button className="btn" onClick={saveBcast}>Save</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>🔧 System Switches</h3>
+        <div className="row" style={{ marginBottom: 12 }}>
+          <strong style={{ minWidth: 130 }}>Killswitch:</strong>
+          <span className={'badge ' + (data.config.killswitch ? 'err' : 'ok')}>
+            {data.config.killswitch ? 'ACTIVE' : 'OFF'}
+          </span>
+          <button className={'btn ' + (data.config.killswitch ? 'green' : 'red')}
+            onClick={() => toggleKill(!data.config.killswitch)}>
+            {data.config.killswitch ? 'Turn OFF' : 'KILL ALL'}
+          </button>
+          <span style={{ fontSize: 11, opacity: 0.7 }}>
+            (sabhi validations reject honge)
+          </span>
+        </div>
+        <div className="row">
+          <strong style={{ minWidth: 130 }}>Maintenance:</strong>
+          <span className={'badge ' + (data.config.maintenance ? 'warn' : 'ok')}>
+            {data.config.maintenance ? 'ON' : 'OFF'}
+          </span>
+          <button className={'btn ' + (data.config.maintenance ? 'green' : 'gray')}
+            onClick={() => toggleMaint(!data.config.maintenance)}>
+            {data.config.maintenance ? 'Turn OFF' : 'Turn ON'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------- Main App ----------
+function App() {
+  const [logged, setLogged] = useState(null);
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState('home');
+  const [toastMsg, setToastMsg] = useState({ msg: '', type: 'ok' });
+
+  const toast = useCallback((msg, type = 'ok') => {
+    setToastMsg({ msg, type });
+    setTimeout(() => setToastMsg({ msg: '', type: 'ok' }), 2500);
+  }, []);
+
+  const load = useCallback(async () => {
+    const r = await API.call('admin/dashboard');
+    if (r.status === 401) { setLogged(false); return; }
+    if (r.data.ok) { setLogged(true); setData(r.data); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // auto refresh every 15s
+  useEffect(() => {
+    if (!logged) return;
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [logged, load]);
+
+  async function logout() {
+    await API.call('admin/logout');
+    setLogged(false); setData(null);
+  }
+
+  if (logged === null) return <div className="login-wrap">Loading…</div>;
+  if (!logged) return <Login onLogin={load} />;
+
+  const tabs = ['home', 'keys', 'devices', 'logs', 'config'];
+
+  return (
+    <div className="wrap">
+      <Toast msg={toastMsg.msg} type={toastMsg.type} />
+      <div className="head">
+        <h2 style={{ margin: 0 }}>🎛️ Key Panel</h2>
+        <div className="row">
+          {tabs.map(t => (
+            <button key={t} className={'tab ' + (tab === t ? 'on' : '')}
+              onClick={() => setTab(t)}>{t.toUpperCase()}</button>
+          ))}
+          <button className="btn red" onClick={logout}>Logout</button>
+        </div>
+      </div>
+
+      {tab === 'home'    && <Home data={data} load={load} toast={toast} />}
+      {tab === 'keys'    && <KeysTab data={data} load={load} toast={toast} />}
+      {tab === 'devices' && <DevicesTab data={data} load={load} toast={toast} />}
+      {tab === 'logs'    && <LogsTab data={data} load={load} toast={toast} />}
+      {tab === 'config'  && <ConfigTab data={data} load={load} toast={toast} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
